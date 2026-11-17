@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · kut.nz{% endblock %}
+{% block content %}
+<main class="status-page">
+  <div class="status-card">
+    {% if status >= 400 %}<p class="status-code" aria-hidden="true">{{ status }}</p>{% endif %}
+    <h1>{{ title }}</h1>
+    {% if body %}<p>{{ body }}</p>{% endif %}
+    <div class="status-actions">
+      <a class="btn btn-yellow" href="{{ base }}/">Crear mi propio enlace</a>
+    </div>
+    {% if code and status in (404, 410) %}
+    <p class="report">¿Llegaste aquí por un enlace sospechoso?
+      <button type="button" data-report="{{ code }}">Reportar enlace</button></p>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

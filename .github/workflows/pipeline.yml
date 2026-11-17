@@ -1,0 +1,161 @@
+name: pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: docker.io/ikramzaldivar/kutnz-api
+  AWS_REGION: us-east-1
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.meta.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+      - name: Compilar
+        run: python -m compileall -q app worker apm.py
+      - id: meta
+        run: echo "release=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Imagen Docker
+        run: |
+          docker build \
+            --build-arg SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+            --build-arg KUT_RELEASE="${{ steps.meta.outputs.release }}" \
+            -t "$IMAGE:sha-${{ steps.meta.outputs.release }}" .
+          docker save "$IMAGE:sha-${{ steps.meta.outputs.release }}" | gzip > image.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imagen
+          path: image.tar.gz
+          retention-days: 7
+
+  uat:
+    name: UAT (pruebas unitarias y cobertura)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: pytest + cobertura (mínimo 80 %)
+        run: >
+          pytest -q --junitxml=junit.xml
+          --cov=app --cov=worker --cov=apm --cov-report=xml --cov-report=term --cov-fail-under=80
+      - name: Resumen de cobertura
+        if: always()
+        run: |
+          echo "## Cobertura de pruebas" >> "$GITHUB_STEP_SUMMARY"
+          python -m coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+      - name: Reporte de pruebas
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: dorny/test-reporter@v2
+        with:
+          name: Pruebas unitarias (pytest)
+          path: junit.xml
+          reporter: java-junit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reportes-de-pruebas
+          path: |
+            junit.xml
+            coverage.xml
+
+  publish:
+    name: Publicar en Docker Hub
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [build, uat]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: imagen
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - run: |
+          gunzip -c image.tar.gz | docker load
+          docker push "$IMAGE:sha-${{ needs.build.outputs.release }}"
+
+  deploy-dev:
+    name: Deploy Dev
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: https://dev.kut.nz
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Instance refresh + smoke test
+        env:
+          ASG_NAME: ${{ vars.ASG_NAME }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          SOURCE_IMAGE: ${{ env.IMAGE }}:sha-${{ needs.build.outputs.release }}
+          RELEASE: ${{ needs.build.outputs.release }}
+        run: bash .github/scripts/deploy_asg.sh
+
+  deploy-prod:
+    name: Deploy Prod
+    needs: [build, deploy-dev]
+    runs-on: ubuntu-latest
+    environment:
+      name: prod
+      url: https://kut.nz
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Instance refresh + smoke test
+        env:
+          ASG_NAME: ${{ vars.ASG_NAME }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          SOURCE_IMAGE: ${{ env.IMAGE }}:sha-${{ needs.build.outputs.release }}
+          RELEASE: ${{ needs.build.outputs.release }}
+        run: bash .github/scripts/deploy_asg.sh
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Versión (tag de git y de Docker Hub)
+        run: |
+          VERSION="v1.0.${{ github.run_number }}"
+          docker buildx imagetools create -t "$IMAGE:$VERSION" -t "$IMAGE:latest" "$IMAGE:sha-${{ needs.build.outputs.release }}"
+          git tag "$VERSION" && git push origin "$VERSION"
+          echo "Prod en $VERSION (${{ needs.build.outputs.release }})" >> "$GITHUB_STEP_SUMMARY"

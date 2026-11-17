@@ -1,0 +1,11 @@
+.venv
+.git
+infra
+docs
+tests
+loadtest
+scripts
+**/__pycache__
+.pytest_cache
+*.pptx
+*.png

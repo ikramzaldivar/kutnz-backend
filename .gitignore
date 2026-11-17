@@ -1,0 +1,32 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+# Terraform: el estado contiene secretos e IDs de la cuenta
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+!infra/terraform.tfvars.example
+infra/.terraform.lock.hcl.bak
+loadtest/results/
+
+# Logs de despliegue (contienen IDs de la cuenta de AWS)
+deploy*.log
+infra/tfplan
+infra/*.plan
+
+# Resultados crudos de k6 (cientos de MB) y archivos locales de las pruebas
+loadtest/resultados/
+loadtest/.codes
+loadtest/.k6path
+
+# Documento final y póster (se entregan aparte)
+docs/documento/
+docs/poster/
+
+# Reportes de pruebas
+.coverage
+coverage.xml
+junit.xml
+htmlcov/
