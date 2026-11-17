@@ -9,7 +9,7 @@ import logging
 import os
 
 import sentry_sdk
-from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration, ignore_logger
 
 RELEASE = os.getenv("KUT_RELEASE", "local")
 HOST = os.getenv("KUT_PUBLIC_HOST", "localhost")
@@ -23,6 +23,9 @@ def init_sentry() -> bool:
     dsn = os.getenv("SENTRY_DSN", "")
     if not dsn:
         return False
+    # El log de acceso de uvicorn trae la IP del visitante: kut.nz no guarda IPs, así que no se manda a Sentry
+    # (las trazas ya registran cada request sin la IP, con send_default_pii=False).
+    ignore_logger("uvicorn.access")
     sentry_sdk.init(
         dsn=dsn,
         environment=ENVIRONMENT,

@@ -37,3 +37,13 @@ def test_demo_routes_only_when_enabled(env, monkeypatch):
     client = TestClient(apm.app, raise_server_exceptions=False)
     assert client.get("/_apm/message").json()["data"]["sent"] is False
     assert client.get("/_apm/error").status_code == 500
+
+
+def test_access_log_with_ips_is_not_sent(env, monkeypatch):
+    import sentry_sdk
+    from sentry_sdk.integrations import logging as sentry_logging
+
+    monkeypatch.setattr(sentry_sdk, "init", lambda **kwargs: None)  # sin cliente real en las pruebas
+    apm = load_apm(monkeypatch, SENTRY_DSN="https://public@o0.ingest.sentry.io/0")
+    assert apm.SENTRY_ON is True
+    assert "uvicorn.access" in sentry_logging._IGNORED_LOGGERS
