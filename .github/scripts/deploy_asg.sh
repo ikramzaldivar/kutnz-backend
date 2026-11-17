@@ -11,7 +11,7 @@ set -euo pipefail
 read -r LT_ID LT_VERSION < <(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$ASG_NAME" \
   --query 'AutoScalingGroups[0].LaunchTemplate.[LaunchTemplateId,Version]' --output text)
 TARGET=$(aws ec2 describe-launch-template-versions --launch-template-id "$LT_ID" --versions "$LT_VERSION" \
-  --query 'LaunchTemplateVersions[0].LaunchTemplateData.UserData' --output text | base64 -d | sed -n 's/^docker pull //p' | head -1)
+  --query 'LaunchTemplateVersions[0].LaunchTemplateData.UserData' --output text | base64 -d | tr -d '\r' | sed -n 's/^docker pull //p' | head -1)
 [[ -n "$TARGET" ]] || { echo "No encontré la imagen en la plantilla $LT_ID v$LT_VERSION"; exit 1; }
 echo "ASG $ASG_NAME (plantilla $LT_ID v$LT_VERSION) descarga: $TARGET"
 
