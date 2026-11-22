@@ -19,6 +19,7 @@ _running = True
 
 
 def _stop(*_):
+    """Manejador de SIGTERM/SIGINT: termina el lote en curso y sale del ciclo."""
     global _running
     _running = False
 
@@ -45,6 +46,7 @@ def process(events: list[dict]) -> None:
 
 
 def run() -> None:
+    """Ciclo principal: long polling a SQS, procesa cada lote y borra los mensajes procesados."""
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
     queue = get_settings().clicks_queue_url
