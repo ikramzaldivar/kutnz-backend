@@ -16,6 +16,21 @@ La documentación completa está en la [Wiki](../../wiki): arquitectura, compone
 - [kutnz-infra](https://github.com/ikramzaldivar/kutnz-infra): Terraform del ambiente Dev y de los roles de CI/CD.
 - [kutnz](https://github.com/ikramzaldivar/kutnz): proyecto original de Diseño de Sistemas Escalables. Este repo parte de una copia; ese repo no se modifica.
 
+## Estructura del código
+
+| Ruta | Contenido |
+| --- | --- |
+| `app/main.py` | Rutas de FastAPI: API, redirección y páginas de estado |
+| `app/links.py` | Reglas de negocio de los enlaces, independientes de HTTP |
+| `app/store.py` | Acceso a DynamoDB |
+| `app/cache.py` | Caché de Redis, rate limiting e idempotencia |
+| `app/clicks.py` | Publicación de eventos de clic en SQS |
+| `app/auth.py` | Autenticación con tokens de Cognito (y modo `dev` en local) |
+| `app/security.py` | Contraseñas de enlaces (argon2) y revisión de destinos con Safe Browsing |
+| `app/codes.py`, `app/urls.py` | Validación de alias y de URLs de destino |
+| `worker/worker.py` | Consumidor de SQS que agrega las estadísticas |
+| `apm.py` | Envoltura de Sentry |
+
 ## Desarrollo local (sin AWS)
 
 ```bash

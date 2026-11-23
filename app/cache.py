@@ -30,6 +30,7 @@ def client() -> redis.Redis:
 
 
 def _safe(fn, default=None):
+    """Ejecuta fn contra Redis; si falla, abre el circuito y devuelve default."""
     global _open_until
     if time.monotonic() < _open_until:
         return default
@@ -60,10 +61,12 @@ def put_link(code: str, view: dict) -> None:
 
 
 def put_not_found(code: str) -> None:
+    """Caché negativa: recuerda por poco tiempo que el código no existe."""
     _safe(lambda: client().set(_key(code), NOT_FOUND, ex=get_settings().negative_cache_ttl_seconds))
 
 
 def invalidate(code: str) -> None:
+    """Borra el enlace de la caché para que la siguiente visita lo lea de DynamoDB."""
     _safe(lambda: client().delete(_key(code)))
 
 
@@ -82,6 +85,7 @@ def hit(bucket: str, limit: int, window_seconds: int) -> bool:
 
 
 def idempotency_get(key: str):
+    """Respuesta guardada para una llave de idempotencia, o None si no existe."""
     raw = _safe(lambda: client().get(f"idem:{key}"))
     return json.loads(raw) if raw else None
 
@@ -91,4 +95,5 @@ def idempotency_put(key: str, value: dict, ttl: int = 86400) -> None:
 
 
 def ping() -> bool:
+    """True si Redis responde; lo usa /readyz."""
     return bool(_safe(lambda: client().ping(), default=False))

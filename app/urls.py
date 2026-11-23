@@ -5,14 +5,20 @@ MAX_URL_LENGTH = 2048
 
 
 class UrlError(ValueError):
-    pass
+    """URL de destino inválida; el mensaje se muestra tal cual al usuario."""
 
 
 def host_of(url: str) -> str:
+    """Host de la URL en minúsculas y sin el punto final ("Ejemplo.com." → "ejemplo.com")."""
     return (urlsplit(url).hostname or "").lower().rstrip(".")
 
 
 def validate_target(url: str, self_hosts: set[str]) -> str:
+    """Valida una URL de destino y la devuelve sin espacios alrededor.
+
+    Rechaza esquemas distintos de http/https, credenciales embebidas, dominios sin punto
+    y cualquier host propio (self_hosts) para evitar bucles de redirección.
+    """
     url = url.strip()
     if not url or len(url) > MAX_URL_LENGTH:
         raise UrlError(f"La URL debe tener entre 1 y {MAX_URL_LENGTH} caracteres.")

@@ -22,18 +22,24 @@ RESERVED = frozenset({
 
 
 def generate_code() -> str:
+    """Genera un código aleatorio de CODE_LENGTH símbolos con un RNG criptográfico."""
     return "".join(secrets.choice(ALPHABET) for _ in range(CODE_LENGTH))
 
 
 def normalize(code: str) -> str:
+    """Quita espacios y pasa a minúsculas; es la forma canónica en la que se guardan los códigos."""
     return code.strip().lower()
 
 
 class AliasError(ValueError):
-    pass
+    """Alias inválido; el mensaje se muestra tal cual al usuario."""
 
 
 def validate_alias(alias: str) -> str:
+    """Normaliza el alias y lo valida (longitud, caracteres, guiones y reservados).
+
+    Devuelve el alias normalizado o lanza AliasError con un mensaje para el usuario.
+    """
     a = normalize(alias)
     if not ALIAS_MIN <= len(a) <= ALIAS_MAX:
         raise AliasError(f"El alias debe tener entre {ALIAS_MIN} y {ALIAS_MAX} caracteres.")
