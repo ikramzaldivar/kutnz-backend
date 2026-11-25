@@ -187,12 +187,14 @@ def add_clicks(code: str, n: int) -> None:
 # ---------------- métricas ----------------
 
 def add_stat(code: str, dimension: str, n: int = 1) -> None:
+    """Suma n al contador de una dimensión ("day#...", "country#...", etc.)."""
     stats_table().update_item(
         Key={"code": code, "dim": dimension}, UpdateExpression="ADD n :n", ExpressionAttributeValues={":n": n},
     )
 
 
 def add_unique_visitors(code: str, day: str, visitors: set[str]) -> None:
+    """Agrega identificadores anónimos al conjunto de visitantes del día."""
     stats_table().update_item(
         Key={"code": code, "dim": f"uv#{day}"}, UpdateExpression="ADD visitors :v",
         ExpressionAttributeValues={":v": set(visitors)},
@@ -200,6 +202,7 @@ def add_unique_visitors(code: str, day: str, visitors: set[str]) -> None:
 
 
 def get_stats(code: str) -> list[dict]:
+    """Todas las dimensiones de un enlace, recorriendo todas las páginas de la consulta."""
     items, kwargs = [], {"KeyConditionExpression": Key("code").eq(code)}
     while True:
         resp = stats_table().query(**kwargs)
@@ -210,6 +213,7 @@ def get_stats(code: str) -> list[dict]:
 
 
 def delete_stats(code: str) -> None:
+    """Borra las métricas de un enlace (se llama al eliminarlo)."""
     with stats_table().batch_writer() as batch:
         for item in get_stats(code):
             batch.delete_item(Key={"code": code, "dim": item["dim"]})
@@ -218,6 +222,7 @@ def delete_stats(code: str) -> None:
 # ---------------- moderación ----------------
 
 def moderation_put(kind: str, value: str, extra: dict | None = None) -> None:
+    """Agrega un dominio, usuario o reporte a la tabla de moderación."""
     moderation_table().put_item(Item={"kind": kind, "value": value, "created_at": int(time.time()), **(extra or {})})
 
 
@@ -226,6 +231,7 @@ def moderation_delete(kind: str, value: str) -> None:
 
 
 def moderation_has(kind: str, value: str) -> bool:
+    """True si el valor está registrado (p. ej. un dominio bloqueado)."""
     return "Item" in moderation_table().get_item(Key={"kind": kind, "value": value})
 
 
