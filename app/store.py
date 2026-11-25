@@ -19,15 +19,16 @@ from .config import get_settings
 
 
 class Conflict(Exception):
-    pass
+    """El código ya existe (la escritura condicional falló)."""
 
 
 class NotFound(Exception):
-    pass
+    """El enlace no existe o no pertenece al usuario."""
 
 
 @lru_cache
 def _ddb():
+    """Recurso de DynamoDB compartido; aws_endpoint_url apunta a DynamoDB Local en desarrollo."""
     s = get_settings()
     return boto3.resource("dynamodb", region_name=s.aws_region, endpoint_url=s.aws_endpoint_url)
 
@@ -64,12 +65,14 @@ def _plain(item: dict | None) -> dict | None:
 
 
 def _is_conditional_failure(exc: ClientError) -> bool:
+    """True si DynamoDB rechazó la escritura porque no se cumplió la ConditionExpression."""
     return exc.response["Error"]["Code"] == "ConditionalCheckFailedException"
 
 
 # ---------------- enlaces ----------------
 
 def create_link(item: dict) -> dict:
+    """Inserta el enlace solo si el código está libre; si no, lanza Conflict."""
     try:
         links_table().put_item(Item=item, ConditionExpression=Attr("code").not_exists())
     except ClientError as exc:
@@ -80,6 +83,7 @@ def create_link(item: dict) -> dict:
 
 
 def get_link(code: str, consistent: bool = False) -> dict | None:
+    """Lee un enlace por código. consistent=True evita leer una versión vieja tras una escritura."""
     resp = links_table().get_item(Key={"code": code}, ConsistentRead=consistent)
     return _plain(resp.get("Item"))
 
@@ -119,6 +123,7 @@ def update_link(code: str, changes: dict, owner_id: str | None) -> dict:
 
 
 def delete_link(code: str, owner_id: str | None) -> None:
+    """Borra el enlace. Con owner_id, solo si es del dueño; si no, lanza NotFound."""
     cond = Attr("code").exists()
     if owner_id is not None:
         cond = cond & Attr("owner_id").eq(owner_id)
@@ -131,6 +136,7 @@ def delete_link(code: str, owner_id: str | None) -> None:
 
 
 def list_links(owner_id: str, limit: int = 50, cursor: str | None = None) -> tuple[list[dict], str | None]:
+    """Enlaces del usuario, del más nuevo al más viejo. El cursor es la LastEvaluatedKey en base64."""
     kwargs = {
         "IndexName": "owner-index",
         "KeyConditionExpression": Key("owner_id").eq(owner_id),
