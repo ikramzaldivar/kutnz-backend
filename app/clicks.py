@@ -28,16 +28,22 @@ _BOT_RE = re.compile(
 
 
 def is_bot(user_agent: str) -> bool:
+    """True para User-Agents vacíos, crawlers y generadores de vista previa (no cuentan como clic)."""
     return not user_agent or bool(_BOT_RE.search(user_agent))
 
 
 def visitor_id(ip: str, user_agent: str, day: str) -> str:
+    """Identificador anónimo del visitante: HMAC de IP + User-Agent con una sal distinta cada día.
+
+    El mismo visitante da el mismo valor durante un día, pero no se puede relacionar entre días.
+    """
     secret = get_settings().visitor_salt_secret.encode()
     daily_salt = hmac.new(secret, day.encode(), hashlib.sha256).digest()
     return hmac.new(daily_salt, f"{ip}|{user_agent}".encode(), hashlib.sha256).hexdigest()[:16]
 
 
 def build_event(code: str, ip: str, user_agent: str, referer: str, country: str, counted: bool) -> dict:
+    """Arma el evento de clic que procesa el worker; no incluye la IP."""
     now = time.time()
     day = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y-%m-%d")
     ua = parse_ua(user_agent or "")
@@ -64,6 +70,7 @@ def _sqs():
 
 
 def publish(event: dict) -> None:
+    """Envía el evento a SQS. Si no hay cola configurada o SQS falla, el clic se descarta."""
     url = get_settings().clicks_queue_url
     if not url:
         return
