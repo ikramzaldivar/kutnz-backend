@@ -260,6 +260,14 @@ class DomainIn(BaseModel):
     domain: str
 
 
+def normalize_domain(value: str) -> str:
+    """Forma en que se guarda un dominio bloqueado: sin espacios, en minúsculas y sin "www.".
+
+    Bloquear y desbloquear usan la misma, así "www.malo.com" y "malo.com" son el mismo registro.
+    """
+    return value.strip().lower().removeprefix("www.")
+
+
 class UserIn(BaseModel):
     user_id: str
 
@@ -276,7 +284,7 @@ def admin_enable(code: str, admin: User = Depends(require_admin)):
 
 @app.post("/api/v1/admin/blocked-domains", status_code=201, tags=["moderación"])
 def admin_block_domain(body: DomainIn, _: User = Depends(require_admin)):
-    domain = body.domain.strip().lower().removeprefix("www.")
+    domain = normalize_domain(body.domain)
     if "." not in domain:
         raise HTTPException(422, "Dominio inválido.")
     store.moderation_put("domain", domain)
@@ -286,7 +294,7 @@ def admin_block_domain(body: DomainIn, _: User = Depends(require_admin)):
 
 @app.delete("/api/v1/admin/blocked-domains/{domain}", status_code=204, tags=["moderación"])
 def admin_unblock_domain(domain: str, _: User = Depends(require_admin)):
-    store.moderation_delete("domain", domain.lower())
+    store.moderation_delete("domain", normalize_domain(domain))
     _blocked_domains.clear()
     return Response(status_code=204)
 

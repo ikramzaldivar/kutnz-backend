@@ -230,6 +230,18 @@ def test_admin_moderation(env):
     assert client.get("/api/v1/admin/reports", headers=auth("ana")).status_code == 403
 
 
+def test_unblock_domain_with_www(env):
+    client, _ = env
+    # se bloquea con "www." y se guarda como "malo.com"
+    r = client.post("/api/v1/admin/blocked-domains", json={"domain": "www.malo.com"}, headers=auth("root", True))
+    assert r.json()["data"]["domain"] == "malo.com"
+    assert client.post("/api/v1/links", json={"url": "https://malo.com/x"}).status_code == 422
+    # desbloquear escribiéndolo con "www." y mayúsculas sí lo libera
+    r = client.delete("/api/v1/admin/blocked-domains/WWW.Malo.com", headers=auth("root", True))
+    assert r.status_code == 204
+    assert client.post("/api/v1/links", json={"url": "https://malo.com/x"}).status_code == 201
+
+
 def test_redis_down_opens_circuit_and_redirect_still_works(env, monkeypatch):
     client, _ = env
     link = create(client, {"url": "https://a.com"})
