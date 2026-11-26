@@ -253,3 +253,11 @@ def test_redis_down_opens_circuit_and_redirect_still_works(env, monkeypatch):
     monkeypatch.setattr(cache, "_open_until", 0.0)  # pasa el tiempo de espera: se vuelve a intentar
     client.get(f"/{link['code']}", headers=BROWSER)
     assert len(calls) > tried
+
+
+def test_max_clicks_error_message():
+    from app.links import InvalidInput, parse_max_clicks
+    for value in (0, 1_000_000_001):
+        with pytest.raises(InvalidInput, match="entre 1 y 1,000,000,000"):
+            parse_max_clicks(value)
+    assert parse_max_clicks(1_000_000_000) == 1_000_000_000
