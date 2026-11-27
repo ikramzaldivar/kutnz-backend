@@ -48,7 +48,7 @@ def parse_max_clicks(value) -> int | None:
     except (TypeError, ValueError) as exc:
         raise InvalidInput("El límite de clics debe ser un número entero.") from exc
     if not 1 <= n <= MAX_CLICKS_LIMIT:
-        raise InvalidInput("El límite de clics debe ser al menos 1.")
+        raise InvalidInput(f"El límite de clics debe estar entre 1 y {MAX_CLICKS_LIMIT:,}.")
     return n
 
 
