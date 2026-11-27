@@ -11,11 +11,11 @@ CODE_RETRIES = 5
 
 
 class InvalidInput(ValueError):
-    pass
+    """Datos inválidos del usuario; el mensaje se muestra tal cual."""
 
 
 class Forbidden(Exception):
-    pass
+    """Operación no permitida (p. ej. opciones avanzadas sin cuenta); el mensaje se muestra tal cual."""
 
 
 def now() -> int:
@@ -23,6 +23,7 @@ def now() -> int:
 
 
 def parse_expiry(value: str | int | None) -> int | None:
+    """Convierte la caducidad (epoch o ISO 8601; sin zona = UTC) a epoch. Debe estar en el futuro."""
     if value in (None, ""):
         return None
     if isinstance(value, int):
@@ -41,6 +42,7 @@ def parse_expiry(value: str | int | None) -> int | None:
 
 
 def parse_max_clicks(value) -> int | None:
+    """Valida el límite de clics; vacío significa sin límite."""
     if value in (None, ""):
         return None
     try:
@@ -53,6 +55,7 @@ def parse_max_clicks(value) -> int | None:
 
 
 def status_of(link: dict, t: int | None = None) -> str:
+    """Estado del enlace: desactivado, caducado, agotado o activo (en ese orden de prioridad)."""
     t = t or now()
     if link.get("disabled"):
         return "desactivado"
@@ -162,6 +165,7 @@ def create(data: dict, owner_id: str | None) -> dict:
 
 
 def get_owned(code: str, user) -> dict:
+    """Enlace del usuario (o cualquiera si es admin); si no, NotFound."""
     link = store.get_link(codes.normalize(code), consistent=True)
     if not link or (link.get("owner_id") != user.id and not user.is_admin):
         raise store.NotFound(code)  # mismo error para "no existe" y "no es tuyo": no revela qué códigos existen
@@ -211,6 +215,7 @@ def update(code: str, data: dict, user) -> dict:
 
 
 def delete(code: str, user) -> None:
+    """Borra el enlace, lo saca de la caché y elimina sus métricas."""
     link = get_owned(code, user)
     store.delete_link(link["code"], None if user.is_admin else user.id)
     cache.invalidate(link["code"])

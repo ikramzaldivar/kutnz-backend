@@ -19,15 +19,16 @@ from .config import get_settings
 
 
 class Conflict(Exception):
-    pass
+    """El código ya existe (la escritura condicional falló)."""
 
 
 class NotFound(Exception):
-    pass
+    """El enlace no existe o no pertenece al usuario."""
 
 
 @lru_cache
 def _ddb():
+    """Recurso de DynamoDB compartido; aws_endpoint_url apunta a DynamoDB Local en desarrollo."""
     s = get_settings()
     return boto3.resource("dynamodb", region_name=s.aws_region, endpoint_url=s.aws_endpoint_url)
 
@@ -64,12 +65,14 @@ def _plain(item: dict | None) -> dict | None:
 
 
 def _is_conditional_failure(exc: ClientError) -> bool:
+    """True si DynamoDB rechazó la escritura porque no se cumplió la ConditionExpression."""
     return exc.response["Error"]["Code"] == "ConditionalCheckFailedException"
 
 
 # ---------------- enlaces ----------------
 
 def create_link(item: dict) -> dict:
+    """Inserta el enlace solo si el código está libre; si no, lanza Conflict."""
     try:
         links_table().put_item(Item=item, ConditionExpression=Attr("code").not_exists())
     except ClientError as exc:
@@ -80,6 +83,7 @@ def create_link(item: dict) -> dict:
 
 
 def get_link(code: str, consistent: bool = False) -> dict | None:
+    """Lee un enlace por código. consistent=True evita leer una versión vieja tras una escritura."""
     resp = links_table().get_item(Key={"code": code}, ConsistentRead=consistent)
     return _plain(resp.get("Item"))
 
@@ -119,6 +123,7 @@ def update_link(code: str, changes: dict, owner_id: str | None) -> dict:
 
 
 def delete_link(code: str, owner_id: str | None) -> None:
+    """Borra el enlace. Con owner_id, solo si es del dueño; si no, lanza NotFound."""
     cond = Attr("code").exists()
     if owner_id is not None:
         cond = cond & Attr("owner_id").eq(owner_id)
@@ -131,6 +136,7 @@ def delete_link(code: str, owner_id: str | None) -> None:
 
 
 def list_links(owner_id: str, limit: int = 50, cursor: str | None = None) -> tuple[list[dict], str | None]:
+    """Enlaces del usuario, del más nuevo al más viejo. El cursor es la LastEvaluatedKey en base64."""
     kwargs = {
         "IndexName": "owner-index",
         "KeyConditionExpression": Key("owner_id").eq(owner_id),
@@ -181,12 +187,14 @@ def add_clicks(code: str, n: int) -> None:
 # ---------------- métricas ----------------
 
 def add_stat(code: str, dimension: str, n: int = 1) -> None:
+    """Suma n al contador de una dimensión ("day#...", "country#...", etc.)."""
     stats_table().update_item(
         Key={"code": code, "dim": dimension}, UpdateExpression="ADD n :n", ExpressionAttributeValues={":n": n},
     )
 
 
 def add_unique_visitors(code: str, day: str, visitors: set[str]) -> None:
+    """Agrega identificadores anónimos al conjunto de visitantes del día."""
     stats_table().update_item(
         Key={"code": code, "dim": f"uv#{day}"}, UpdateExpression="ADD visitors :v",
         ExpressionAttributeValues={":v": set(visitors)},
@@ -194,6 +202,7 @@ def add_unique_visitors(code: str, day: str, visitors: set[str]) -> None:
 
 
 def get_stats(code: str) -> list[dict]:
+    """Todas las dimensiones de un enlace, recorriendo todas las páginas de la consulta."""
     items, kwargs = [], {"KeyConditionExpression": Key("code").eq(code)}
     while True:
         resp = stats_table().query(**kwargs)
@@ -204,6 +213,7 @@ def get_stats(code: str) -> list[dict]:
 
 
 def delete_stats(code: str) -> None:
+    """Borra las métricas de un enlace (se llama al eliminarlo)."""
     with stats_table().batch_writer() as batch:
         for item in get_stats(code):
             batch.delete_item(Key={"code": code, "dim": item["dim"]})
@@ -212,6 +222,7 @@ def delete_stats(code: str) -> None:
 # ---------------- moderación ----------------
 
 def moderation_put(kind: str, value: str, extra: dict | None = None) -> None:
+    """Agrega un dominio, usuario o reporte a la tabla de moderación."""
     moderation_table().put_item(Item={"kind": kind, "value": value, "created_at": int(time.time()), **(extra or {})})
 
 
@@ -220,6 +231,7 @@ def moderation_delete(kind: str, value: str) -> None:
 
 
 def moderation_has(kind: str, value: str) -> bool:
+    """True si el valor está registrado (p. ej. un dominio bloqueado)."""
     return "Item" in moderation_table().get_item(Key={"kind": kind, "value": value})
 
 

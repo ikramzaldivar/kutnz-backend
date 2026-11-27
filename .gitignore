@@ -30,3 +30,7 @@ docs/poster/
 coverage.xml
 junit.xml
 htmlcov/
+
+# Editores
+.vscode/
+.idea/
